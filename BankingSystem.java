@@ -1,14 +1,15 @@
 import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
-// 1. Transaction Class for Persistence
 class Transaction {
-    String date;
+    String timestamp;
     String type;
     double amount;
     double balanceAfter;
 
     public Transaction(String type, double amount, double balanceAfter) {
-        this.date = new Date().toString();
+        this.timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
         this.type = type;
         this.amount = amount;
         this.balanceAfter = balanceAfter;
@@ -16,141 +17,130 @@ class Transaction {
 
     @Override
     public String toString() {
-        return String.format("%-25s | %-12s | %-10.2f | %-10.2f", date, type, amount, balanceAfter);
+        return String.format("%-18s | %-15s | %10.2f | %10.2f", timestamp, type, amount, balanceAfter);
     }
 }
 
-// 2. User/Account Class
 class Account {
+    long accNo;
     String name, address, contact, password;
-    long accountNumber;
     double balance;
-    List<Transaction> history;
+    List<Transaction> history = new ArrayList<>();
 
-    public Account(long accNum, String name, String address, String contact, String password, double initialDeposit) {
-        this.accountNumber = accNum;
+    public Account(long accNo, String name, String address, String contact, String password, double initialDeposit) {
+        this.accNo = accNo;
         this.name = name;
         this.address = address;
         this.contact = contact;
         this.password = password;
         this.balance = initialDeposit;
-        this.history = new ArrayList<>();
-        history.add(new Transaction("Initial", initialDeposit, initialDeposit));
+        history.add(new Transaction("Initial Deposit", initialDeposit, initialDeposit));
     }
 }
 
-// 3. Main Banking System Logic
 public class BankingSystem {
-    private static Map<Long, Account> database = new HashMap<>();
-    private static long accountCounter = 1001; // Starting account number
-    private static Scanner sc = new Scanner(System.in);
-    private static Account currentUser = null;
+    static Map<Long, Account> db = new HashMap<>();
+    static long nextAccNo = 1001;
+    static Scanner input = new Scanner(System.in);
+    static Account session = null;
 
     public static void main(String[] args) {
         while (true) {
-            System.out.println("\n--- WELCOME TO CORE JAVA BANK ---");
-            if (currentUser == null) {
-                System.out.println("1. Register\n2. Login\n3. Exit");
-                int choice = sc.nextInt();
-                if (choice == 1) register();
-                else if (choice == 2) login();
-                else break;
+            System.out.println("\n--- MAIN MENU ---");
+            if (session == null) {
+                System.out.println("1. Register\n2. Login\n0. Exit");
+                int choice = getIntChoice();
+                
+                if (choice == 1) doRegister();
+                else if (choice == 2) doLogin();
+                else if (choice == 0) break;
             } else {
-                showUserMenu();
+                showDashboard();
             }
         }
     }
 
-    // FEATURE 1: User Registration
-    private static void register() {
-        sc.nextLine(); // consume newline
-        System.out.print("Enter Name: "); String name = sc.nextLine();
-        System.out.print("Enter Address: "); String addr = sc.nextLine();
-        System.out.print("Enter Contact: "); String contact = sc.nextLine();
-        System.out.print("Set Password: "); String pass = sc.next();
-        System.out.print("Initial Deposit: "); double dep = sc.nextDouble();
+    static void doRegister() {
+        input.nextLine(); 
+        System.out.print("Name: "); String name = input.nextLine();
+        System.out.print("Address: "); String addr = input.nextLine();
+        System.out.print("Contact: "); String phone = input.nextLine();
+        System.out.print("Password: "); String pass = input.nextLine();
+        System.out.print("Deposit: "); double dep = getDoubleInput();
 
-        Account newAcc = new Account(accountCounter++, name, addr, contact, pass, dep);
-        database.put(newAcc.accountNumber, newAcc);
-        System.out.println("\nSUCCESS! Your Account Number is: " + newAcc.accountNumber);
+        Account acc = new Account(nextAccNo++, name, addr, phone, pass, dep);
+        db.put(acc.accNo, acc);
+        System.out.println("\nAccount created! Your Number: " + acc.accNo);
     }
 
-    // FEATURE 6: Password Protection (Login)
-    private static void login() {
-        System.out.print("Account Number: "); long acc = sc.nextLong();
-        System.out.print("Password: "); String pass = sc.next();
+    static void doLogin() {
+        System.out.print("Account No: "); long no = input.nextLong();
+        System.out.print("Password: "); String pass = input.next();
 
-        if (database.containsKey(acc) && database.get(acc).password.equals(pass)) {
-            currentUser = database.get(acc);
-            System.out.println("Login Successful. Welcome " + currentUser.name);
+        if (db.containsKey(no) && db.get(no).password.equals(pass)) {
+            session = db.get(no);
+            System.out.println("Welcome, " + session.name);
         } else {
-            System.out.println("Error: Invalid Credentials!");
+            System.out.println("Invalid login credentials.");
         }
     }
 
-    private static void showUserMenu() {
-        System.out.println("\n1. View Profile\n2. Deposit\n3. Withdraw\n4. Fund Transfer\n5. Statement\n6. Logout");
-        int choice = sc.nextInt();
+    static void showDashboard() {
+        System.out.println("\n1. Profile\n2. Edit Info\n3. Deposit\n4. Withdraw\n5. Transfer\n6. Statement\n0. Logout");
+        int choice = getIntChoice();
+
         switch (choice) {
-            case 1: 
-                System.out.println("Name: " + currentUser.name + "\nBalance: $" + currentUser.balance);
-                break;
-            case 2: deposit(); break;
-            case 3: withdraw(); break;
-            case 4: transfer(); break;
-            case 5: printStatement(); break;
-            case 6: currentUser = null; break;
-        }
-    }
-
-    // FEATURE 3: Deposit & Withdrawal
-    private static void deposit() {
-        System.out.print("Enter Amount: "); double amt = sc.nextDouble();
-        currentUser.balance += amt;
-        currentUser.history.add(new Transaction("Deposit", amt, currentUser.balance));
-        System.out.println("Deposit Successful. New Balance: $" + currentUser.balance);
-    }
-
-    private static void withdraw() {
-        System.out.print("Enter Amount: "); double amt = sc.nextDouble();
-        // FEATURE 7: Error Handling
-        if (amt > currentUser.balance) {
-            System.out.println("ERROR: Insufficient funds!");
-        } else {
-            currentUser.balance -= amt;
-            currentUser.history.add(new Transaction("Withdrawal", amt, currentUser.balance));
-            System.out.println("Withdrawal Successful. New Balance: $" + currentUser.balance);
-        }
-    }
-
-    // FEATURE 4: Fund Transfer
-    private static void transfer() {
-        System.out.print("Recipient Account Number: "); long recAcc = sc.nextLong();
-        if (database.containsKey(recAcc)) {
-            System.out.print("Enter Amount: "); double amt = sc.nextDouble();
-            if (amt <= currentUser.balance) {
-                Account recipient = database.get(recAcc);
-                currentUser.balance -= amt;
-                recipient.balance += amt;
-                
-                currentUser.history.add(new Transaction("Transfer To " + recAcc, amt, currentUser.balance));
-                recipient.history.add(new Transaction("Received From " + currentUser.accountNumber, amt, recipient.balance));
-                
-                System.out.println("Transfer Successful!");
-            } else {
-                System.out.println("ERROR: Insufficient Balance.");
+            case 1 -> {
+                System.out.println("Acc: " + session.accNo + "\nOwner: " + session.name + "\nBalance: $" + session.balance);
             }
-        } else {
-            System.out.println("ERROR: Recipient not found.");
+            case 2 -> {
+                input.nextLine();
+                System.out.print("New Address: "); session.address = input.nextLine();
+                System.out.print("New Contact: "); session.contact = input.nextLine();
+                System.out.println("Updated successfully.");
+            }
+            case 3 -> {
+                double amt = getDoubleInput();
+                session.balance += amt;
+                session.history.add(new Transaction("Deposit", amt, session.balance));
+                System.out.println("Success.");
+            }
+            case 4 -> {
+                double amt = getDoubleInput();
+                if (amt <= session.balance) {
+                    session.balance -= amt;
+                    session.history.add(new Transaction("Withdrawal", amt, session.balance));
+                } else System.out.println("Insufficient funds.");
+            }
+            case 5 -> {
+                System.out.print("Recipient Acc: "); long target = input.nextLong();
+                if (db.containsKey(target) && target != session.accNo) {
+                    double amt = getDoubleInput();
+                    if (amt <= session.balance) {
+                        session.balance -= amt;
+                        db.get(target).balance += amt;
+                        session.history.add(new Transaction("Sent to " + target, amt, session.balance));
+                        db.get(target).history.add(new Transaction("From " + session.accNo, amt, db.get(target).balance));
+                        System.out.println("Transfer complete.");
+                    } else System.out.println("Insufficient funds.");
+                } else System.out.println("Target account invalid.");
+            }
+            case 6 -> {
+                System.out.printf("%-18s | %-15s | %10s | %10s\n", "Date", "Type", "Amount", "Balance");
+                for (Transaction t : session.history) System.out.println(t);
+            }
+            case 0 -> session = null;
         }
     }
 
-    // FEATURE 5: Account Statement
-    private static void printStatement() {
-        System.out.println("\n--- ACCOUNT STATEMENT ---");
-        System.out.printf("%-25s | %-12s | %-10s | %-10s\n", "Date", "Type", "Amount", "Balance");
-        for (Transaction t : currentUser.history) {
-            System.out.println(t);
-        }
+    static int getIntChoice() {
+        try { return input.nextInt(); } 
+        catch (Exception e) { input.next(); return -1; }
+    }
+
+    static double getDoubleInput() {
+        System.out.print("Amount: ");
+        try { return input.nextDouble(); } 
+        catch (Exception e) { input.next(); return 0; }
     }
 }
